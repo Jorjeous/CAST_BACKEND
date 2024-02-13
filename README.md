@@ -1,93 +1,140 @@
-# CAST_BACKEND
+## What is the Label Studio ML backend?
+
+The Label Studio ML backend is an SDK that lets you wrap your machine learning code and turn it into a web server.
+The web server can be then connected to Label Studio to automate labeling tasks and dynamically retrieve pre-annotations from your model.
+
+There are several use-cases for the ML backend:
+
+- Pre-annotate data with a model
+- Use active learning to select the most relevant data for labeling
+- Interactive (AI-assisted) labeling
+- Model fine-tuning based on recently annotated data
+
+If you just need to load static pre-annotated data into Label Studio, running an ML backend might be overkill for you. Instead, you can [import preannotated data](https://labelstud.io/guide/predictions.html).
 
 
+## Quickstart
 
-## Getting started
+Follow this example tutorial to create a ML backend service:
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+1. Install the latest Label Studio ML SDK:
+   ```bash
+   git clone https://github.com/HumanSignal/label-studio-ml-backend.git
+   cd label-studio-ml-backend/
+   pip install -e .
+   ```
+   
+2. Create a new ML backend directory:
+    
+   ```bash
+   label-studio-ml create my_ml_backend
+   ```
+   You can go to the `my_ml_backend` directory and modify the code to implement your own inference logic.
+   The directory structure should look like this:
+   ```
+    my_ml_backend/
+    ├── Dockerfile
+    ├── docker-compose.yml
+    ├── model.py
+    ├── _wsgi.py
+    ├── README.md
+    └── requirements.txt
+    ```
+    `Dockefile` and `docker-compose.yml` are used to run the ML backend with Docker.
+    `model.py` is the main file where you can implement your own training and inference logic.
+    `_wsgi.py` is a helper file that is used to run the ML backend with Docker (you don't need to modify it)
+    `README.md` is a readme file with instructions on how to run the ML backend.
+    `requirements.txt` is a file with Python dependencies.
+3. Run the ML backend server
+   ```bash
+   docker-compose up
+   ```
+    The ML backend server will be available at `http://localhost:9090`. You can use this URL to connect it to Label Studio:
+    Go to the project Settings > Machine Learning and Add a new ML backend.
+   
+This ML backend is an example provided by Label Studio. It actually doesn't do anything. If you want to implement the actual inference logic, go to the next section.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Implement prediction logic
+In your model directory, locate the `model.py` file (for example, `my_ml_backend/model.py`).
 
-## Add your files
-
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
-
+The `model.py` file contains a class declaration inherited from `LabelStudioMLBase`. This class provides wrappers for the API methods that are used by Label Studio to communicate with the ML backend. You can override the methods to implement your own logic:
+```python
+def predict(self, tasks, context, **kwargs):
+    """Make predictions for the tasks."""
+    return predictions
 ```
-cd existing_repo
-git remote add origin https://gitlab-master.nvidia.com/gnemo/cast_backend.git
-git branch -M main
-git push -uf origin main
+The `predict` method is used to make predictions for the tasks. It uses the following:
+- `tasks`: [Label Studio tasks in JSON format](https://labelstud.io/guide/task_format.html)
+- `context`: [Label Studio context in JSON format](https://labelstud.io/guide/ml.html#Passing-data-to-ML-backend) - for interactive labeling scenario
+- `predictions`: [Predictions array in JSON format](https://labelstud.io/guide/export.html#Raw-JSON-format-of-completed-tasks)
+
+Once you implement the `predict` method, you can see predictions from the connected ML backend in Label Studio.
+
+## Implement training logic
+You can also implement the `fit` method to train your model. The `fit` method is typically used to train the model on the labeled data, although it can be used for any arbitrary operations that require data persistence (for example, storing labeled data in database, saving model weights, keeping LLM prompts history, etc).
+By default, the `fit` method is called at any data action in Label Studio, like creating a new task or updating annotations. You can modify this behavior in Label Studio > Settings > Webhooks.
+
+To implement the `fit` method, you need to override the `fit` method in your `model.py` file:
+```python
+def fit(self, event, data, **kwargs):
+    """Train the model on the labeled data."""
+    old_model = self.get('old_model')
+    # write your logic to update the model
+    self.set('new_model', new_model)
+```
+with 
+- `event`: event type can be `'ANNOTATION_CREATED'`, `'ANNOTATION_UPDATED', etc.
+- `data` the payload received from the event (check more on [Webhook event reference](https://labelstud.io/guide/webhook_reference.html))
+
+Additionally, there are two helper methods that you can use to store and retrieve data from the ML backend:
+- `self.set(key, value)` - store data in the ML backend
+- `self.get(key)` - retrieve data from the ML backend
+
+Both methods can be used elsewhere in the ML backend code, for example, in the `predict` method to get the new model weights.
+
+## Other methods and parameters
+Other methods and parameters are available within the `LabelStudioMLBase` class:
+
+- `self.label_config` - returns the [Label Studio labeling config](https://labelstud.io/guide/setup.html) as XML string.
+- `self.parsed_label_config` - returns the [Label Studio labeling config](https://labelstud.io/guide/setup.html) as JSON.
+- `self.model_version` - returns the current model version.
+
+
+## Run without Docker
+
+To run without docker (for example, for debugging purposes), you can use the following command:
+```bash
+pip install -r my_ml_backend
+label-studio-ml start my_ml_backend
 ```
 
-## Integrate with your tools
+### Modify the port
+To modify the port, use the `-p` parameter:
+```bash
+label-studio-ml start my_ml_backend -p 9091
+```
 
-- [ ] [Set up project integrations](https://gitlab-master.nvidia.com/gnemo/cast_backend/-/settings/integrations)
+## Deploy your ML backend to GCP
 
-## Collaborate with your team
+Before you start:
+1. Install [gcloud](https://cloud.google.com/sdk/docs/install)
+2. Init billing for account if it's not [activated](https://console.cloud.google.com/project/_/billing/enable)
+3. Init gcloud, type the following commands and login in browser:
+```bash
+gcloud auth login
+```
+4. Activate your Cloud Build API
+5. Find your GCP project ID
+6. (Optional) Add GCP_REGION with your default region to your ENV variables 
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+To start deployment:
+1. Create your own ML backend
+2. Start deployment to GCP:
+```bash
+label-studio-ml deploy gcp {ml-backend-local-dir} \
+--from={model-python-script} \
+--gcp-project-id {gcp-project-id} \
+--label-studio-host {https://app.heartex.com} \
+--label-studio-api-key {YOUR-LABEL-STUDIO-API-KEY}
+```
+3. After label studio deploys the model - you will get model endpoint in console.
