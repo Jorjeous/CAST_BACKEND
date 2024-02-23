@@ -48,11 +48,19 @@ Follow this example tutorial to create a ML backend service:
     `asr.py` is the main file where you can implement your own training and inference logic.
     `_wsgi.py` is a helper file that is used to run the ML backend with Docker (you don't need to modify it)
     `requirements.txt` is a file with Python dependencies.
+    `stt_en_fastconformer_hybrid_large_pc.nemo` is a english fasrconformer model, to start the server a bit faster. 
 
 3. Do not forget to download LFS files. 
    ```bash
    git-lfs-fetch
    ```
+4. Before building the docker image
+ - run the Label studio application (refer to [CAST](https://gitlab-master.nvidia.com/gnemo/cast)) 
+ - Log in or create new account 
+ - Go to account and settings (http://localhost:8080/user/account)
+ - Copy Access Token and past it in asr.py (there is variable API_TOKEN = 'your_token' )
+ - If you running the Label Studio app on other port than 8080 - change it as well: label_studio_url = 'http://host.docker.internal:PORT'
+ 
 4. When done - build the docker image. 
    ```bash
    docker compose build
