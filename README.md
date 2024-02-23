@@ -19,43 +19,64 @@ Follow this example tutorial to create a ML backend service:
 
 1. Install the latest Label Studio ML SDK:
    ```bash
-   git clone https://github.com/HumanSignal/label-studio-ml-backend.git
+   git clone https://gitlab-master.nvidia.com/gnemo/cast_backend.git
    cd label-studio-ml-backend/
    pip install -e .
    ```
    
-2. Create a new ML backend directory:
+2. Go to the NeMo directory:
     
    ```bash
-   label-studio-ml create my_ml_backend
+   cd label_studio_ml/examples/nemo
    ```
-   You can go to the `my_ml_backend` directory and modify the code to implement your own inference logic.
+
    The directory structure should look like this:
    ```
-    my_ml_backend/
+    nemo/
     ├── Dockerfile
     ├── docker-compose.yml
-    ├── model.py
+    ├── asr.py
     ├── _wsgi.py
-    ├── README.md
-    └── requirements.txt
+    ├── requirements.txt
+    ├── stt_en_fastconformer_hybrid_large_pc.nemo (LFS)
+    ├── uwsgi.ini
+    ├── align.py
+    └── utils
+
     ```
     `Dockefile` and `docker-compose.yml` are used to run the ML backend with Docker.
-    `model.py` is the main file where you can implement your own training and inference logic.
+    `asr.py` is the main file where you can implement your own training and inference logic.
     `_wsgi.py` is a helper file that is used to run the ML backend with Docker (you don't need to modify it)
-    `README.md` is a readme file with instructions on how to run the ML backend.
     `requirements.txt` is a file with Python dependencies.
-3. Run the ML backend server
+
+3. Do not forget to download LFS files. 
    ```bash
-   docker-compose up
+   git-lfs-fetch
+   ```
+4. When done - build the docker image. 
+   ```bash
+   docker compose build
+   ```
+5. Run the server:
+   ```bash
+   docker compose up
    ```
     The ML backend server will be available at `http://localhost:9090`. You can use this URL to connect it to Label Studio:
     Go to the project Settings > Machine Learning and Add a new ML backend.
+    Enter your chosen name for ML model and paste the address as previously mentioned. Then, click on "Validate and Save."
+
+    *Note: If you encounter an error message, it typically indicates that the server requires more time to load. In this case, click "Validate and Save" a few more times.
    
-This ML backend is an example provided by Label Studio. It actually doesn't do anything. If you want to implement the actual inference logic, go to the next section.
+This particullar example works with Long Audio template.
+
+*Note: you can start both server and label studio on remote machine. When done just create a tunnel from label studio application. Make shure it's not running on 9090. That port is binded for ML backend.
+
+For more information about modification of your ML backend refer to: [Label Studio ML backend](https://github.com/HumanSignal/label-studio-ml-backend/tree/master/label_studio_ml/examples)
+
+
 
 ## Implement prediction logic
-In your model directory, locate the `model.py` file (for example, `my_ml_backend/model.py`).
+In your model directory, locate the `asr.py` file.
 
 The `model.py` file contains a class declaration inherited from `LabelStudioMLBase`. This class provides wrappers for the API methods that are used by Label Studio to communicate with the ML backend. You can override the methods to implement your own logic:
 ```python
